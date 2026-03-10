@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MatchApp | Conexões Reais</title>
+    <script src="/socket.io/socket.io.js"></script>
+    <style>
+        :root {
+            --gradient: linear-gradient(45deg, #fd297b, #ff5864, #ff6b6b);
+            --bg-color: #f0f2f5;
+            --white: #ffffff;
+        }
+
+        body { 
+            font-family: 'Segoe UI', sans-serif; 
+            background-color: var(--bg-color);
+            margin: 0; display: flex; justify-content: center; align-items: center; height: 100vh; 
+        }
+
+        .app-container { 
+            width: 100%; max-width: 400px; height: 90vh; background: var(--white);
+            display: flex; flex-direction: column; box-shadow: 0 10px 25px rgba(0,0,0,0.1); border-radius: 20px; overflow: hidden; 
+        }
+
+        header { background: var(--gradient); padding: 15px; text-align: center; color: white; font-weight: bold; display: flex; justify-content: space-between; align-items: center; }
+
+        /* Telas */
+        .screen { display: none; flex-direction: column; flex: 1; padding: 20px; box-sizing: border-box; }
+        .active { display: flex; }
+
+        /* UI de Input e Botão */
+        input { width: 100%; padding: 12px; margin-bottom: 15px; border: 1px solid #ddd; border-radius: 25px; outline: none; box-sizing: border-box; }
+        .btn-main { width: 100%; padding: 12px; border: none; border-radius: 25px; background: var(--gradient); color: white; font-weight: bold; cursor: pointer; }
+        
+        /* Chat Style */
+        #messages { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; padding-bottom: 10px; }
+        .msg { max-width: 80%; padding: 10px 15px; border-radius: 18px; font-size: 0.9rem; position: relative; }
+        .sent { align-self: flex-end; background: var(--gradient); color: white; border-bottom-right-radius: 2px; }
+        .received { align-self: flex-start; background: #e4e6eb; color: black; border-bottom-left-radius: 2px; }
+        .msg-user { font-size: 0.7rem; display: block; margin-bottom: 3px; opacity: 0.8; }
+
+        .chat-input { display: flex; gap: 10px; padding-top: 10px; border-top: 1px solid #eee; }
+        #logout-btn { background: rgba(255,255,255,0.3); border: none; color: white; padding: 5px 12px; border-radius: 15px; cursor: pointer; }
+    </style>
+</head>
+<body>
+
+    <div class="app-container">
+        <header>
+            <span>🔥 MatchApp</span>
+            <button id="logout-btn" style="display: none;" onclick="logout()">Sair</button>
+        </header>
+
+        <div id="auth-screen" class="screen active">
+            <h2 style="text-align: center; color: #ff5864;">Bem-vindo(a)!</h2>
+            <p style="text-align: center; color: #666;">Crie seu perfil para começar a conversar.</p>
+            <input type="email" id="email" placeholder="Seu melhor e-mail">
+            <input type="password" id="password" placeholder="Crie uma senha">
+            <button class="btn-main" onclick="entrar()">Cadastrar e Entrar</button>
+            <p style="font-size: 0.75rem; color: #999; text-align: center; margin-top: 20px;">
+                * Um e-mail de boas-vindas será enviado em 30s.
+            </p>
+        </div>
+
+        <div id="chat-screen" class="screen">
+            <div id="messages"></div>
+            <div class="chat-input">
+                <input type="text" id="msgInput" placeholder="Envie um 'Oi'...">
+                <button class="send-btn" onclick="enviar()" style="border:none; background:none; color:#ff5864; font-weight:bold; cursor:pointer;">ENVIAR</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const socket = io();
+        let meuEmail = "";
+
+        // FUNÇÃO DE CADASTRO/LOGIN
+        async function entrar() {
+            const email = document.getElementById('email').value;
+            if(!email) return alert("Preencha o e-mail!");
+
+            // Chamada para o servidor (Fila de E-mail)
+            await fetch('/register', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email })
+            });
+
+            // Lógica de Troca de Tela
+            meuEmail = email;
+            document.getElementById('auth-screen').classList.remove('active');
+            document.getElementById('chat-screen').classList.add('active');
+            document.getElementById('logout-btn').style.display = 'block';
+            
+            alert("Sucesso! Perfil ativo e e-mail agendado para 30s.");
+        }
+
+        // FUNÇÃO DE LOGOUT
+        function logout() {
+            meuEmail = "";
+            document.getElementById('chat-screen').classList.remove('active');
+            document.getElementById('auth-screen').classList.add('active');
+            document.getElementById('logout-btn').style.display = 'none';
+            document.getElementById('messages').innerHTML = ""; // Limpa o chat
+            alert("Você saiu da conta.");
+        }
+
+        // FUNÇÃO DE ENVIAR MENSAGEM
+        function enviar() {
+            const input = document.getElementById('msgInput');
+            if(input.value.trim() === "") return;
+
+            socket.emit('chatMessage', { user: meuEmail, text: input.value });
+            input.value = '';
+        }
+
+        // ESCUTAR MENSAGENS DO SERVIDOR
+        socket.on('message', (data) => {
+            const msgDiv = document.getElementById('messages');
+            const isMe = data.user === meuEmail;
+            const msgClass = isMe ? 'sent' : 'received';
+
+            msgDiv.innerHTML += `
+                <div class="msg ${msgClass}">
+                    <span class="msg-user">${isMe ? 'Você' : data.user}</span>
+                    ${data.text}
+                </div>`;
+            msgDiv.scrollTop = msgDiv.scrollHeight;
+        });
+
+        // Atalho Enter
+        document.getElementById('msgInput').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') enviar();
+        });
+    </script>
+</body>
+</html>
